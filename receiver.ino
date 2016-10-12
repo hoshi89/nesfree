@@ -1,7 +1,8 @@
+#include "VirtualWire/VirtualWire.h"
+
 void setup() {
   // put your setup code here, to run once:
-  // TEST
-  int i = 0;
+  vw_set_rx_pin(12);
 }
 
 void loop() {
