@@ -1,11 +1,13 @@
 #include <VirtualWire.h>
 
-#define  tx_pin     12
 #define  latch_pin   2
 #define  clock_pin   3
 #define  data_pin    4
+#define  tx_pin      5
 
 void setup() {
+
+  Serial.begin(9600);
 
   // Set up the pin modes
   pinMode(tx_pin, OUTPUT);

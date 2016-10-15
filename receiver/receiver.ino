@@ -1,68 +1,53 @@
 #include <VirtualWire.h>
 
-#define  rx_pin      MOSI // 11
-#define  latch_pin   SS   // 10
-#define  clock_pin   SCK  // 13
-#define  data_pin    MISO // 12
+// NOTE: Only pin 2 and 3 works with interrupts
+#define  latch_pin   2
+#define  clock_pin   3
+#define  data_pin    4
+#define  rx_pin      5
 
 uint8_t  data = 0xff;
+uint8_t  latched_data = 0xff;
 
 void setup() {
 
-  // turn on SPI in slave mode
-  SPCR |= bit (SPE);
-
-  // have to send on master in, *slave out*
-  pinMode(data_pin, OUTPUT);
   pinMode(latch_pin, INPUT);
   pinMode(clock_pin, INPUT);
+  pinMode(data_pin, OUTPUT);
 
-  // Attach interrupt for when the NES is latching the current state.
-  // The reason why we can't use the built in SPI interrupt is because
-  // the NES latches data on the RISING edge, while the SPI latch is
-  // on the FALLING edge.
+  vw_set_rx_pin(rx_pin);
+  vw_setup(2000);
+  vw_rx_start();
+
   attachInterrupt(digitalPinToInterrupt(latch_pin), latchState, RISING);
-  
-  // The LatchSate-pin should be on the SPI SS pin.
-  // The SPIMODE must also be set to trigger the intterupt on
-  // the RISING edge of SS
-
-
-  // HYOPTHESIS 1:
-  // Normally, the SS pin is kept HIGH when slave is NOT selected.
-  // During this time we are able to write to the SPDR register.
-  // So if the NES latch is connected to SS, it will be kept low,
-  // making the SPDR unwritable.
-  // So as long as we can attach an interrupt on the latch pin on the
-  // rising edge, we can set the SPDR register when it is HIGH and before it
-  // goes LOW again.
-  // Data in SPDR can only be shifted out while SS is low
-  // which should work very well in this case.
+  attachInterrupt(digitalPinToInterrupt(clock_pin), shiftData, RISING);
 }
 
 void loop() {
   
-  // Listen to transmitted data and write it to the SPDR register
-  // as long as it's not currently being read by the NES
-  //if (digitalRead(latch_pin) == HIGH) {
-  //  SPDR = 0xff;
-  //}
-
-  // Store current input state
-  // EDIT: Input byte should be stored in the SPDR register.
-  // That way we can use the SPI protocol and send the data
-  // to the NES acting as a slave.
+  uint8_t buf[1];
+  uint8_t buflen = 1;
+  
+  if (vw_get_message(buf, &buflen)) {
+    data = buf[0];
+  }
 }
 
 void latchState() {
-
-  // If this interrupt is being run, it means that the NES would
-  // normally latch data in the NES controller shift register now.
-  // In this case we're telling the SPI that we're unselecting it.
-  // While the SPI is unselected, we're able to edit the SPDR register
-  // which contains the data that will be presented on the
-  // SPI MISO line.
-
-  // Simply put the NES controller input in the SPDR register.
-  SPDR = data;
+  latched_data = data;
+  if((latched_data & 1) > 0) {
+    digitalWrite(data_pin, HIGH);
+  } else {
+    digitalWrite(data_pin, LOW);
+  }
 }
+
+void shiftData() {
+  latched_data = latched_data >> 1;
+  if((latched_data & 1) > 0) {
+    digitalWrite(data_pin, HIGH);
+  } else {
+    digitalWrite(data_pin, LOW);
+  }
+}
+
